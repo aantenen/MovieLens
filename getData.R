@@ -12,6 +12,10 @@ if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.
 library(tidyverse)
 library(caret)
 library(data.table)
+library(ggplot2)
+library(randomForest)
+library(lubridate)
+library(stringr)
 
 # MovieLens 10M dataset:
 # https://grouplens.org/datasets/movielens/10m/
