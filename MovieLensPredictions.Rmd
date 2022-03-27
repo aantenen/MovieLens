@@ -1,0 +1,35 @@
+---
+
+title: "MovieLens Predictions"
+author: "Andrew Antenen"
+date: "3/26/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This report details attempts to create a model for predicting user movie ratings based on the MovieLens dataset. Based on the massive size of data options for models were limited. 
+
+##Data validation and cleansing
+
+First validated that there are no blank values. All values in datasets are present. 
+
+Then validate that all values are valid and make sense.
+
+```{r}
+plot(allEffectRegularRMSES)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
