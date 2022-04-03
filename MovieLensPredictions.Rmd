@@ -14,22 +14,60 @@ knitr::opts_chunk$set(echo = TRUE)
 
 This report details attempts to create a model for predicting user movie ratings based on the MovieLens dataset. Based on the massive size of data options for models were limited. 
 
+Models were built using value effects and regularization to predict future ratings. Many different combinations of affects were tested before the final model was determined. 
+
 ##Data validation and cleansing
 
-First validated that there are no blank values. All values in datasets are present. 
+First validated that there are no blank values. All values in dataset are present. 
 
 Then validate that all values are valid and make sense.
 
 ```{r}
-plot(allEffectRegularRMSES)
+cntChart<-function(x){x%>%ggplot(aes(group,cnt,color=avg))+
+    geom_point(aes(size=avg))+
+    scale_color_gradientn(colors=heat.colors(10))
+}
+
+avgChart<-function(x){
+  y<-as.numeric(as.numeric(max(x$group))-as.numeric(min(x$group)))
+  y<-y*.25
+  x%>%ggplot(aes(group,avg,color=cnt))+
+    geom_point(aes(size=cnt))+
+    scale_color_gradientn(colors=heat.colors(10))
+    #scale_x_continuous(breaks = seq(min(x$group),max(x$group),y))
+    }
+
+knitr::kable(data.frame(measure = c("rating","year","age"),min=c(min(edx$rating),min(as.numeric(edx$year)),min(edx$age)),
+           max=c(max(edx$rating),max(as.numeric(edx$year)),max(edx$age))))
+
+# avgRatingChart<-function(x){
+#   y<-min(group)
+#   z<-max(group)
+#   edxMovie%>%ggplot(aes(group,avg))+
+#     geom_boxplot(aes(group=cut_width(group,3)))+
+#     scale_x_discrete(breaks=seq(min(group),max(group),500))
+# }
+
+
+# avgRatingChart(edxMovie)
+#cntChart(edxMovie)
+chartValues<-list(edxMovie,edxUser,edxYear,edxAge)
+lapply(chartValues,cntChart)
+lapply(chartValues,avgChart)
+
 ```
 
-## Including Plots
+As seen in the chart the movieIds are missing for many Ids in the middle of the dataset, which is strange but should not affect the data.
 
-You can also embed plots, for example:
+With the age of movies it can also be seen that some review dates are before the release date of the movie.It does not seem this error affects the validity of results and age is determined to not be a good indicator of rating.
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+
+#Models
+Initially a naive approach was used, to predict ratings, the full dataset average 
+```{r}
+overallAvgRating
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+

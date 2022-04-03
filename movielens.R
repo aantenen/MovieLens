@@ -5,7 +5,9 @@ edxNA<-na.omit(edx)
 identical(edxNA,edx)
 
 #examine values for dimensions
-
+#add year and age values to final sets
+edx<-edx%>%mutate(year=as.numeric(str_sub(title,-5,-2)),age=year(as_datetime(timestamp))-as.numeric(str_sub(title,-5,-2)))
+validation<-validation%>%mutate(year=as.numeric(str_sub(title,-5,-2)),age=year(as_datetime(timestamp))-as.numeric(str_sub(title,-5,-2)))
 #create test set 
 test_index<-createDataPartition(edx$rating,times = 1,p=.2,list=FALSE)
 test_setEdx<-edx[test_index]
@@ -29,13 +31,12 @@ test_setEdx<-test_setEdx%>%
 # test_setEdx<-minTest_setEdx
 # train_setEdx<-minTrain_setEdx
 
-#add year and age values to sets
-train_setEdx<-train_setEdx%>%mutate(year=str_sub(title,-5,-2),age=year(as_datetime(timestamp))-as.numeric(str_sub(title,-5,-2)))
-test_setEdx<-test_setEdx%>%mutate(year=str_sub(title,-5,-2),age=year(as_datetime(timestamp))-as.numeric(str_sub(title,-5,-2)))
-#add year and age values to final sets
-edx<-edx%>%mutate(year=str_sub(title,-5,-2),age=year(as_datetime(timestamp))-as.numeric(str_sub(title,-5,-2)))
-validation<-validation%>%mutate(year=str_sub(title,-5,-2),age=year(as_datetime(timestamp))-as.numeric(str_sub(title,-5,-2)))
 
+#setup full data set summaries
+edxMovie<-edx%>%mutate(group=movieId)%>%group_by(group)%>%summarise(cnt=n(),avg=mean(rating),min=min(rating),max=max(rating))
+edxUser<-edx%>%mutate(group=userId)%>%group_by(group)%>%summarize(cnt=n(),avg=mean(rating),min=min(rating),max=max(rating))
+edxYear<-edx%>%mutate(group=year)%>%group_by(group)%>%summarize(cnt=n(),avg=mean(rating),min=min(rating),max=max(rating))
+edxAge<-edx%>%mutate(group=age)%>%group_by(group)%>%summarize(cnt=n(),avg=mean(rating),min=min(rating),max=max(rating))
 ###TO DO check ranges of values: User, Movie, Score
 ### What to do with review with negative Age
 ###Change min max to min max score selection not SD
@@ -68,20 +69,7 @@ yearReviewCnt<-train_setEdx%>%mutate(year=str_sub(title,-5,-2))%>%group_by(year)
 movieAgeReviewCnt<-train_setEdx%>%mutate(age=year(as_datetime(timestamp))-as.numeric(str_sub(title,-5,-2)))%>%group_by(age)%>%
   summarize(avg=mean(rating),cnt=n(),sd=sd(rating),effect=mean(rating-overallAvgRating))%>%
   mutate(min=avg-sd,max=avg+sd)
-
-avgRatingChart<-function(x){
-  x%>%ggplot(aes(group,avg))+
-    geom_boxplot(aes(group=cut_width(group,3)))+
-    scale_x_discrete(breaks=seq(min(group),max(group),5))
-}
-
-cntChart<-function(x){x%>%ggplot(aes(group,cnt,fill=avg))+
-    geom_crossbar()+
-    scale_fill_gradientn(colors=heat.colors(5))}
-
-dfList=list(movieReviewCnt,userReviewCnt,genreReviewCnt,yearReviewCnt,movieAgeReviewCnt)
-ratingCharts<-lapply(dfList, avgRatingChart)
-#cntCharts<-lapply(dfList,cntChart)
+  
 
 #test individual effects for each category
 
