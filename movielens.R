@@ -62,7 +62,7 @@ genreReviewCnt<-train_setEdx%>%group_by(genres)%>%
   summarise(avg=mean(rating),cnt=n(),sd=sd(rating),effect=mean(rating-overallAvgRating))%>%
   mutate(min=avg-sd,max=avg+sd)
 
-yearReviewCnt<-train_setEdx%>%mutate(year=str_sub(title,-5,-2))%>%group_by(year)%>%
+yearReviewCnt<-train_setEdx%>%group_by(year)%>%
   summarize(avg=mean(rating),cnt=n(),sd=sd(rating),effect=mean(rating-overallAvgRating))%>%
   mutate(min=avg-sd,max=avg+sd)
 
@@ -105,8 +105,7 @@ ageEffectRMSE<-RMSE(ageEffectModel$guess,test_setEdx$rating)
 
 #plot model RMSE
 #To Do: improve plot, create plot function
-rmseList<-c(naiveModelRMSE,movieEffectRMSE,userEffectRMSE,genreEffectRMSE,yearEffectRMSE,ageEffectRMSE,)
-plot(rmseList)
+effectRmseList<-data.frame(model=c("Overall Avg","Movie Avg","User Avg","Genre Avg","Year Avg","Age Avg"),RMSE=c(naiveModelRMSE,movieEffectRMSE,userEffectRMSE,genreEffectRMSE,yearEffectRMSE,ageEffectRMSE))
 
 #create ridgeline visual with errors from each model
 
@@ -118,10 +117,10 @@ userAdjEffect<-train_setEdx%>%left_join(movieReviewCnt,by='movieId')%>%group_by(
 userAdjModel<-test_setEdx%>%left_join(movieEffect,by='movieId')%>%left_join(userAdjEffect,by='userId')%>%
   mutate(guess=overallAvgRating+effect+userAdjEffect)%>%pull(guess)
 userAdjEffectRMSE<-RMSE(userAdjModel,test_setEdx$rating)
-#genreAdjEffect<-train_setEdx%>%left_join(movieEffect,by='movieId')%>%
-# group_by(genres)%>%summarize(genreAdjEffect=rating-overallAvgRating-effect)
-#genreAdjModel<-test_setEdx%>%left_join(movieEffect,by='movieId')%>%
-#  left_join(genreAdjEffect,by='genres')%>%mutate(guess=overallAvgRating+effect+genreAdjEffect)
+genreAdjEffect<-train_setEdx%>%left_join(movieEffect,by='movieId')%>%
+group_by(genres)%>%summarize(genreAdjEffect=rating-overallAvgRating-effect)
+genreAdjModel<-test_setEdx%>%left_join(movieEffect,by='movieId')%>%
+ left_join(genreAdjEffect,by='genres')%>%mutate(guess=overallAvgRating+effect+genreAdjEffect)
 yearAdjEffect<-train_setEdx%>%left_join(movieReviewCnt,by='movieId')%>%left_join(userAdjEffect,by='userId')%>%group_by(year)%>%
   summarise(yearAdjEffect=mean(rating-overallAvgRating-effect-userAdjEffect))
 yearAdjEffectOnly<-train_setEdx%>%group_by(year)%>%summarize(yearAdjEffect = mean(rating-overallAvgRating))
@@ -137,6 +136,7 @@ ageAdjModel<-test_setEdx%>%left_join(movieReviewCnt,by='movieId')%>%left_join(us
   left_join(yearAdjEffect,by='year')%>%left_join(ageAdjEffect,by='age')%>%mutate(guess=overallAvgRating+effect+userAdjEffect+yearAdjEffect)%>%pull(guess)
 ageAdjRMSE<-RMSE(ageAdjModel,test_setEdx$rating)
 
+adjEffectRMSEList<-data.frame(model=c("Overall Avg","Movie Avg","User Adj","Genre Adj","Year Adj","Age Adj"),RMSE=c(naiveModelRMSE,movieEffect,userAdjEffectRMSE,genreAdjEffectRMSE,yearEffectRMSE,ageEffectRMSE))
 #Regularization
 lambda<-seq(1,10,.5)
 

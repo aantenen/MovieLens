@@ -7,22 +7,33 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
+
 ```
 
-## Introduction
+
+```{r}
+source('getdata.R')
+source('movieLens.R')
+library(dplyr)
+library(ggplot2)
+```
+
+# Introduction
 
 This report details attempts to create a model for predicting user movie ratings based on the MovieLens dataset. Based on the massive size of data options for models were limited. 
 
 Models were built using value effects and regularization to predict future ratings. Many different combinations of affects were tested before the final model was determined. 
 
-##Data validation and cleansing
+#Data validation and cleansing
 
-First validated that there are no blank values. All values in dataset are present. 
+The first step was to validate that there were no NA or other invalid datapoints. 
 
-Then validate that all values are valid and make sense.
+Through visualization we can see a few interesting facets of this data. The dataset is missing a large number of movie Ids in the middle of the dataset. This will make prediction of any movies in the validation set that in this range more difficult as it was later determined that the movie average is the most important predictor of rating. It is also noted that there are movies with negative ages at tthe time of review, while strange it does seem possible and should not affect the validity of data. Year and Age are determined to not be great predictors of future rating.
 
-```{r}
+The data allowed for the creation of two additional factors year and subsequently age. The title data of each movie included the movie's release year. By using string manipulation the year could be removed and used as an additional data point in exploration. Combining this with the review timestamp the age of the movie at the time of the review was created. 
+
+```{r }
 cntChart<-function(x){x%>%ggplot(aes(group,cnt,color=avg))+
     geom_point(aes(size=avg))+
     scale_color_gradientn(colors=heat.colors(10))
@@ -38,7 +49,7 @@ avgChart<-function(x){
     }
 
 knitr::kable(data.frame(measure = c("rating","year","age"),min=c(min(edx$rating),min(as.numeric(edx$year)),min(edx$age)),
-           max=c(max(edx$rating),max(as.numeric(edx$year)),max(edx$age))))
+          max=c(max(edx$rating),max(as.numeric(edx$year)),max(edx$age))))
 
 # avgRatingChart<-function(x){
 #   y<-min(group)
@@ -57,16 +68,19 @@ lapply(chartValues,avgChart)
 
 ```
 
-As seen in the chart the movieIds are missing for many Ids in the middle of the dataset, which is strange but should not affect the data.
-
-With the age of movies it can also be seen that some review dates are before the release date of the movie.It does not seem this error affects the validity of results and age is determined to not be a good indicator of rating.
-
 
 #Models
-Initially a naive approach was used, to predict ratings, the full dataset average 
+Initially a naive approach was used to predict ratings, the full dataset average. This model was ineffective at guessing the test set rating. But with a small adjustment and using the average rating of each movie in the dataset it was apparent this was an effective way to model future movie ratings. The user effect was also effective at decreasing the RMSE. Despite the apparent correlation between release year as well as age of the movie these were largely ineffective as a predictor of rating. These factors were barely better than guessing the overall average.
 ```{r}
-overallAvgRating
+rmseList<-data.frame(model=c("Overall Avg","Movie Avg","User Avg","Genre Avg","Year Avg","Age Avg"),RMSE=c(naiveModelRMSE,movieEffectRMSE,userEffectRMSE,genreEffectRMSE,yearEffectRMSE,ageEffectRMSE))
+knitr::kable(effectRmseList)
+
+effectRmseList%>%ggplot(aes(reorder(model,RMSE),RMSE))+
+  geom_point()
+  
 ```
+The next approach used expanded on the individual data point affects and tested the combined affects of the factors on the rating. By combining two of the datapoints, predictions are significantly improved. 
+
 
 
 
