@@ -79,7 +79,16 @@ effectRmseList%>%ggplot(aes(reorder(model,RMSE),RMSE))+
   geom_point()
   
 ```
-The next approach used expanded on the individual data point affects and tested the combined affects of the factors on the rating. By combining two of the datapoints, predictions are significantly improved. 
+The next approach expanded on the individual data point effects and tested the combined effects of the factors on the rating. By combining multiple factors, predictions are significantly improved. During the development of these models it was also discovered that R was not able to 
+
+```{r}
+rmseList<-data.frame(model=c("Overall Avg","Movie Avg","User Avg","Genre Avg","Year Avg","Age Avg"),RMSE=c(naiveModelRMSE,movieEffectRMSE,userEffectRMSE,genreEffectRMSE,yearEffectRMSE,ageEffectRMSE))
+knitr::kable(effectRmseList)
+
+effectRmseList%>%ggplot(aes(reorder(model,RMSE),RMSE))+
+  geom_point()
+  
+```
 
 
 

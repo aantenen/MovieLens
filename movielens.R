@@ -1,13 +1,18 @@
-#Clean and Analyze Data
+#Additional datasetup
+#add year and age values, change genres to id value to reduce size of objects
+genreList<-data.frame(genres=unique(edx$genres))
+genreIDdf<-genreList%>%mutate(genreID=row_number())
 
-#check if any NA
-edxNA<-na.omit(edx)
-identical(edxNA,edx)
+addNewColumns<-function(x){
+  x<-x%>%left_join(genreIDdf,by='genres')%>%
+    mutate(year=as.numeric(str_sub(title,-5,-2)),age=year(as_datetime(timestamp))-as.numeric(str_sub(title,-5,-2)))%>%select(-genres)
+  return(x)
+  }
 
-#examine values for dimensions
-#add year and age values to final sets
-edx<-edx%>%mutate(year=as.numeric(str_sub(title,-5,-2)),age=year(as_datetime(timestamp))-as.numeric(str_sub(title,-5,-2)))
-validation<-validation%>%mutate(year=as.numeric(str_sub(title,-5,-2)),age=year(as_datetime(timestamp))-as.numeric(str_sub(title,-5,-2)))
+edx<-addNewColumns(edx)
+validation<-addNewColumns(validation)
+
+
 #create test set 
 test_index<-createDataPartition(edx$rating,times = 1,p=.2,list=FALSE)
 test_setEdx<-edx[test_index]
@@ -35,12 +40,14 @@ test_setEdx<-test_setEdx%>%
 #setup full data set summaries
 edxMovie<-edx%>%mutate(group=movieId)%>%group_by(group)%>%summarise(cnt=n(),avg=mean(rating),min=min(rating),max=max(rating))
 edxUser<-edx%>%mutate(group=userId)%>%group_by(group)%>%summarize(cnt=n(),avg=mean(rating),min=min(rating),max=max(rating))
+
 edxYear<-edx%>%mutate(group=year)%>%group_by(group)%>%summarize(cnt=n(),avg=mean(rating),min=min(rating),max=max(rating))
 edxAge<-edx%>%mutate(group=age)%>%group_by(group)%>%summarize(cnt=n(),avg=mean(rating),min=min(rating),max=max(rating))
-###TO DO check ranges of values: User, Movie, Score
-### What to do with review with negative Age
-###Change min max to min max score selection not SD
 
+#Clean and Analyze Data
+#check if any NA
+edxNA<-na.omit(edx)
+identical(edxNA,edx)
 #check score distribution
 hist(edx$year)
 
@@ -58,7 +65,7 @@ userReviewCnt <-train_setEdx%>%group_by(userId)%>%
   summarize(avg=mean(rating),cnt=n(),sd=sd(rating),effect=mean(rating-overallAvgRating))%>%
   mutate(min=avg-sd,max=avg+sd)
 
-genreReviewCnt<-train_setEdx%>%group_by(genres)%>%
+genreReviewCnt<-train_setEdx%>%group_by(genreID)%>%
   summarise(avg=mean(rating),cnt=n(),sd=sd(rating),effect=mean(rating-overallAvgRating))%>%
   mutate(min=avg-sd,max=avg+sd)
 
@@ -66,7 +73,7 @@ yearReviewCnt<-train_setEdx%>%group_by(year)%>%
   summarize(avg=mean(rating),cnt=n(),sd=sd(rating),effect=mean(rating-overallAvgRating))%>%
   mutate(min=avg-sd,max=avg+sd)
 
-movieAgeReviewCnt<-train_setEdx%>%mutate(age=year(as_datetime(timestamp))-as.numeric(str_sub(title,-5,-2)))%>%group_by(age)%>%
+movieAgeReviewCnt<-train_setEdx%>%group_by(age)%>%
   summarize(avg=mean(rating),cnt=n(),sd=sd(rating),effect=mean(rating-overallAvgRating))%>%
   mutate(min=avg-sd,max=avg+sd)
   
@@ -94,7 +101,7 @@ movieEffectRMSE<-RMSE(movieEffectModel$guess,test_setEdx$rating)
 userEffectModel<-data.frame(guess=dimensionEffect(x=userReviewCnt,y='userId'))
 userEffectRMSE<-RMSE(userEffectModel$guess,test_setEdx$rating)
 
-genreEffectModel<-data.frame(guess=dimensionEffect(x=genreReviewCnt,y='genres'))
+genreEffectModel<-data.frame(guess=dimensionEffect(x=genreReviewCnt,y='genreID'))
 genreEffectRMSE<-RMSE(genreEffectModel$guess,test_setEdx$rating)
 
 yearEffectModel<-data.frame(guess=dimensionEffect(x=yearReviewCnt,y='year'))
@@ -111,72 +118,71 @@ effectRmseList<-data.frame(model=c("Overall Avg","Movie Avg","User Avg","Genre A
 
 #combine dimension effects
 #can this be written as a function? Pass list of effects and loop throungh?
+#movie effect was greatest by itself so all effects are added in addition to it
 movieEffect<-data.frame(movieId=movieReviewCnt$movieId,effect=movieReviewCnt$effect)
+
 userAdjEffect<-train_setEdx%>%left_join(movieReviewCnt,by='movieId')%>%group_by(userId)%>%
   summarize(userAdjEffect = mean(rating - overallAvgRating-effect))
 userAdjModel<-test_setEdx%>%left_join(movieEffect,by='movieId')%>%left_join(userAdjEffect,by='userId')%>%
   mutate(guess=overallAvgRating+effect+userAdjEffect)%>%pull(guess)
 userAdjEffectRMSE<-RMSE(userAdjModel,test_setEdx$rating)
-genreAdjEffect<-train_setEdx%>%left_join(movieEffect,by='movieId')%>%
-group_by(genres)%>%summarize(genreAdjEffect=rating-overallAvgRating-effect)
-genreAdjModel<-test_setEdx%>%left_join(movieEffect,by='movieId')%>%
- left_join(genreAdjEffect,by='genres')%>%mutate(guess=overallAvgRating+effect+genreAdjEffect)
-yearAdjEffect<-train_setEdx%>%left_join(movieReviewCnt,by='movieId')%>%left_join(userAdjEffect,by='userId')%>%group_by(year)%>%
-  summarise(yearAdjEffect=mean(rating-overallAvgRating-effect-userAdjEffect))
-yearAdjEffectOnly<-train_setEdx%>%group_by(year)%>%summarize(yearAdjEffect = mean(rating-overallAvgRating))
+
+genreAdjEffect<-train_setEdx%>%left_join(movieEffect,by='movieId')%>%left_join(userAdjEffect,by='userId')%>%
+  group_by(genreID)%>%summarize(genreAdjEffect=mean(rating-overallAvgRating-effect-userAdjEffect))
+genreAdjModel<-test_setEdx%>%left_join(movieEffect,by='movieId')%>%left_join(userAdjEffect,by='userId')%>%
+ left_join(genreAdjEffect,by='genreID')%>%mutate(guess=overallAvgRating+effect+userAdjEffect+genreAdjEffect)%>%pull(guess)
+genreAdjEffectRMSE<-RMSE(genreAdjModel,test_setEdx$rating)
+
+yearAdjEffect<-train_setEdx%>%left_join(movieReviewCnt,by='movieId')%>%left_join(userAdjEffect,by='userId')%>%left_join(genreAdjEffect,by='genreID')%>%
+  group_by(year)%>%summarise(yearAdjEffect=mean(rating-overallAvgRating-effect-userAdjEffect-genreAdjEffect))
+#yearAdjEffectOnly<-train_setEdx%>%group_by(year)%>%summarize(yearAdjEffect = mean(rating-overallAvgRating))
 yearAdjModel<-test_setEdx%>%left_join(movieReviewCnt,by='movieId')%>%
-  left_join(userAdjEffect,by='userId')%>%left_join(yearAdjEffect,by='year')%>%
-  mutate(guess=overallAvgRating+effect+userAdjEffect+yearAdjEffect)%>%pull(guess)
+  left_join(userAdjEffect,by='userId')%>%left_join(genreAdjEffect,by='genreID')%>%left_join(yearAdjEffect,by='year')%>%
+  mutate(guess=overallAvgRating+effect+userAdjEffect+genreAdjEffect+yearAdjEffect+genreAdjEffect)%>%pull(guess)
 yearAdjRMSE<-RMSE(yearAdjModel,test_setEdx$rating)
 
 ageAdjEffect<-train_setEdx%>%left_join(movieReviewCnt,by='movieId')%>%left_join(userAdjEffect,by='userId')%>%
-  left_join(yearAdjEffect,by='year')%>%group_by(age)%>%
-  summarize(ageAdjEffect=mean(rating-overallAvgRating-effect-userAdjEffect-yearAdjEffect))
+  left_join(genreAdjEffect,by='genreID')%>%group_by(age)%>%
+  summarize(ageAdjEffect=mean(rating-overallAvgRating-effect-userAdjEffect-genreAdjEffect))
 ageAdjModel<-test_setEdx%>%left_join(movieReviewCnt,by='movieId')%>%left_join(userAdjEffect,by='userId')%>%
-  left_join(yearAdjEffect,by='year')%>%left_join(ageAdjEffect,by='age')%>%mutate(guess=overallAvgRating+effect+userAdjEffect+yearAdjEffect)%>%pull(guess)
+  left_join(genreAdjEffect,by='genreID')%>%left_join(ageAdjEffect,by='age')%>%mutate(guess=overallAvgRating+effect+userAdjEffect+genreAdjEffect)%>%pull(guess)
 ageAdjRMSE<-RMSE(ageAdjModel,test_setEdx$rating)
 
 adjEffectRMSEList<-data.frame(model=c("Overall Avg","Movie Avg","User Adj","Genre Adj","Year Adj","Age Adj"),RMSE=c(naiveModelRMSE,movieEffect,userAdjEffectRMSE,genreAdjEffectRMSE,yearEffectRMSE,ageEffectRMSE))
 #Regularization
 lambda<-seq(1,10,.5)
 
-# movieEffectRegular<-train_setEdx%>%group_by(movieId)%>%summarize(movieRegularized=sum(rating-overallAvgRating)/(n()+5))
-# movieEffectRegularModel <-test_setEdx%>%left_join(movieEffectRegular)%>%mutate(guess=overallAvgRating+movieRegularized)%>%pull(guess)
-# movieEffectRegularRMSE<-RMSE(movieEffectRegularModel,test_setEdx$rating)
-# yearEffectRegular<-train_setEdx%>%left_join(movieEffectRegular,by='movieId')%>%left_join(userEffectRegular)%>%group_by(year)%>%
-#   summarize(yearRegularized=sum(rating-overallAvgRating-movieRegularized-userRegularized)/(n()+1))
-# yearEffectRegularModel <- test_setEdx%>%left_join(movieEffectRegular)%>%left_join(userEffectRegular)%>%left_join(yearEffectRegular)%>%
-#   mutate(guess=overallAvgRating+movieRegularized+userRegularized+yearRegularized)%>%pull(guess)
-# yearEffectRegularRMSE<- RMSE(yearEffectRegularModel,test_setEdx$rating)
-# 
-# ageEffectRegular<-train_setEdx%>%left_join(movieEffectRegular,by='movieId')%>%left_join(userEffectRegular)%>%group_by(age)%>%
-#   summarize(ageRegularized=sum(rating-overallAvgRating-movieRegularized-userRegularized)/(n()+1))
-# ageEffectRegularModel <- test_setEdx%>%left_join(movieEffectRegular)%>%left_join(userEffectRegular)%>%left_join(ageEffectRegular)%>%
-#   mutate(guess=overallAvgRating+movieRegularized+userRegularized+ageRegularized)%>%pull(guess)
-# ageEffectRegularRMSE<- RMSE(ageEffectRegularModel,test_setEdx$rating)
 
 allEffectRegularRMSES<-sapply(lambda,function(L){
-  movieEffectRegular<-train_setEdx%>%group_by(movieId)%>%summarize(movieRegularized=sum(rating-overallAvgRating)/(n()+5))
-  movieEffectRegularModel <-test_setEdx%>%left_join(movieEffectRegular)%>%mutate(guess=overallAvgRating+movieRegularized)%>%pull(guess)
-  movieEffectRegularRMSE<-RMSE(movieEffectRegularModel,test_setEdx$rating)
+  movieEffectRegular<-train_setEdx%>%group_by(movieId)%>%summarize(movieRegularized=sum(rating-overallAvgRating)/(n()+L))
+  movieEffectRegularModel<-test_setEdx%>%left_join(movieEffectRegular, by='movieId')%>%group_by(movieId)%>%summarize(guess=overallAvgRating+movieRegularized)%>%pull(guess)
+  movieEffectRegularRMSE <-RMSE(movieEffectRegularModel,test_setEdx$rating)
   
   userEffectRegular<-train_setEdx%>%left_join(movieEffectRegular,by='movieId')%>%group_by(userId)%>%
-  summarize(userRegularized=sum(rating-overallAvgRating-movieRegularized)/(n()+L))
-userEffectRegularModel<-test_setEdx%>%left_join(movieEffectRegular)%>%left_join(userEffectRegular)%>%mutate(guess=overallAvgRating+movieRegularized+userRegularized)%>%pull(guess)
-#year and age do not affect RMSE
-yearEffectRegular<-train_setEdx%>%left_join(movieEffectRegular,by='movieId')%>%left_join(userEffectRegular)%>%group_by(year)%>%
-  summarize(yearRegularized=sum(rating-overallAvgRating-movieRegularized-userRegularized)/(n()+L))
-yearEffectRegularModel <- test_setEdx%>%left_join(movieEffectRegular)%>%left_join(userEffectRegular)%>%left_join(yearEffectRegular)%>%
-  mutate(guess=overallAvgRating+movieRegularized+userRegularized+yearRegularized)%>%pull(guess)
-yearEffectRegularRMSE<- RMSE(yearEffectRegularModel,test_setEdx$rating)
-
-ageEffectRegular<-train_setEdx%>%left_join(movieEffectRegular,by='movieId')%>%left_join(userEffectRegular)%>%group_by(age)%>%
-  summarize(ageRegularized=sum(rating-overallAvgRating-movieRegularized-userRegularized)/(n()+L))
-ageEffectRegularModel <- test_setEdx%>%left_join(movieEffectRegular)%>%left_join(userEffectRegular)%>%left_join(ageEffectRegular)%>%
-  mutate(guess=overallAvgRating+movieRegularized+userRegularized+ageRegularized)%>%pull(guess)
-ageEffectRegularRMSE<- RMSE(ageEffectRegularModel,test_setEdx$rating)
-
-return(RMSE(ageEffectRegularRMSE,test_setEdx$rating))                                                                
+    summarize(userRegularized=sum(rating-overallAvgRating-movieRegularized)/(n()+L))
+  userEffectREgularModel<-test_setEdx%>%left_join(movieEffectRegular, by='movieId')%>%left_join(userEffectRegular,by='userId')%>%group_by(userId)%>%
+    summarise(guess=overallAvgRating+movieRegularized+userRegularized)
+  userEffectRegularRMSE<-RMSE(userEffectRegularModel,test_setEdx$rating)  
+  
+  genreEffectRegular<-train_setEdx%>%left_join(movieEffectRegular, by='movieId')%>%left_join(userEffectRegular,by='userId')%>%group_by(genreID)%>%
+    summarize(genreRegularized=sum(rating-overallAvgRating-movieRegularized-userRegularized)/(n()+L))
+  genreEffectRegularModel<-test_setEdx%>%left_join(movieEffectRegular, by='movieId')%>%left_join(userEffectRegular,by='userId')%>%left_join(genreEffectRegular,by='genreID')%>%
+    group_by(genreID)%>%mutate(guess=overallAvgRating+movieRegularized+userRegularized+genreRegularized)%>%pull(guess)
+  genreEffectRegularRMSE<-RMSE(genreEffectRegularModel,test_setEdx$rating)
+#ear and age do not affect RMSE
+  yearEffectRegular<-train_setEdx%>%left_join(movieEffectRegular,by='movieId')%>%left_join(userEffectRegular, by='userId')%>%left_join(genreEffectRegular,by='genreID')%>%group_by(year)%>%
+    summarize(yearRegularized=sum(rating-overallAvgRating-movieRegularized-userRegularized-genreRegularized)/(n()+5))
+  yearEffectRegularModel <- test_setEdx%>%left_join(movieEffectRegular)%>%left_join(userEffectRegular)%>%left_join(genreEffectRegular,by='genreID')%>%left_join(yearEffectRegular)%>%
+    mutate(guess=overallAvgRating+movieRegularized+userRegularized+genreRegularized+yearRegularized)%>%pull(guess)
+  yearEffectRegularRMSE<- RMSE(yearEffectRegularModel,test_setEdx$rating)
+  
+  ageEffectRegular<-train_setEdx%>%left_join(movieEffectRegular,by='movieId')%>%left_join(userEffectRegular,by='userId')%>%group_by(age)%>%
+    summarize(ageRegularized=sum(rating-overallAvgRating-movieRegularized-userRegularized)/(n()+5))
+  ageEffectRegularModel <- test_setEdx%>%left_join(movieEffectRegular)%>%left_join(userEffectRegular)%>%left_join(ageEffectRegular)%>%
+    mutate(guess=overallAvgRating+movieRegularized+userRegularized+ageRegularized)%>%pull(guess)
+  ageEffectRegularRMSE<- RMSE(ageEffectRegularModel,test_setEdx$rating)
+  regularRMSEList<-data.frame(c(L,movieEffectRegularRMSE,userEffectRegularRMSE,genreEffectRegularRMSE,yearEffectRegularRMSE,ageEffectRegularRMSE),)
+return(regularRMSEList)                                                                
 })
 
 movieEffectRegular<-train_setEdx%>%group_by(movieId)%>%summarize(movieRegularized=sum(rating-overallAvgRating)/(n()+5))
@@ -184,16 +190,15 @@ userEffectRegular<-train_setEdx%>%left_join(movieEffectRegular,by='movieId')%>%g
   summarize(userRegularized=sum(rating-overallAvgRating-movieRegularized)/(n()+5))
 userEffectRegularModel<-test_setEdx%>%left_join(movieEffectRegular)%>%left_join(userEffectRegular)%>%
   mutate(guess=overallAvgRating+movieRegularized+userRegularized)%>%pull(guess)
-testRegularizationRMSE<-
+testRegularizationRMSE<-RMSE(userEffectRegularModel,test_setEdx$rating)
 
 #final model full edx vs validation data set using regularized effects
-finalMovieEffectRegular<-edx%>%group_by(movieId)%>%summarize(finalMovieRegularized=sum(rating-overallAvgRating)/(n()+5))
+finalMovieEffectRegular<-edx%>%group_by(movieId)%>%summarize(finalMovieEffectRegularized=sum(rating-overallAvgRating)/(n()+5))
 finalUserEffectRegular<-edx%>%left_join(finalMovieEffectRegular)%>%group_by(userId)%>%
-  summarize(finalUserRegularized=sum(rating-overallAvgRating-finalMovieRegularized)/(n()+5))
-finalYearEffectRegular<-edx%>%left_join(finalMovieEffectRegular)%>%left_join(finalUserEffectRegular)%>%group_by(year)%>%
-  summarize(finalYearRegularized=sum(rating-overallAvgRating-finalMovieRegularized-finalUserRegularized)/(n()+5))
+  summarize(finalUserRegularized=mean(rating-overallAvgRating-finalMovieRegularized)/(n()+5))
+finalGenreEffectRegular<-edx%>%left_join(finalMovieEffectRegular)%>%left_join(finalUserEffectRegular)%>%group_by(genreID)%>%
+  summarize(finalGenreEffectRegular=sum(rating-overallAvgRating-finalMovieEffectRegularized-finalUserEffectRegularized)/(n()+5))
 
 finalEffectRegularModel<-validation%>%left_join(finalMovieEffectRegular)%>%left_join(finalUserEffectRegular)%>%
   left_join(finalYearEffectRegular)%>%mutate(guess=overallAvgRating+finalMovieRegularized+finalUserRegularized+finalYearRegularized)%>%pull(guess)
 finalRMSE<-RMSE(finalEffectRegularModel,validation$rating)
-
